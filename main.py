@@ -2,7 +2,11 @@ import os
 import logging
 from discord.ext import commands
 import discord
+import threading
 from dotenv import load_dotenv
+import uvicorn
+from server import app
+import util.mongo as mongo
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
@@ -23,9 +27,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def start_server():
+    uvicorn.run(app, host="localhost", port=8000)
+
 class Bot(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.default()
+        intents = discord.Intents.all()
         intents.messages = True
         if ENVIRONMENT != 'production':
             intents.guilds = True
@@ -35,7 +42,7 @@ class Bot(commands.Bot):
     async def on_ready(self):
         logger.warning(f'Logged in as {self.user} (ID: {self.user.id}) PROD ENVIRONMENT')
         logger.warning('------')
-
+        
     if ENVIRONMENT != 'production':
         from cogwatch import watch
         @watch(path='cogs', preload=True) 
@@ -45,6 +52,7 @@ class Bot(commands.Bot):
       
         
     async def setup_hook(self):
+        await mongo.check_status()
         await self.load_cogs()
 
     async def load_cogs(self):
@@ -78,6 +86,7 @@ class Bot(commands.Bot):
     
 
 async def main():
+    threading.Thread(target=start_server, daemon=True).start()
     bot = Bot()
     await bot.start(TOKEN)
 
