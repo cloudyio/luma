@@ -6,7 +6,9 @@ import threading
 from dotenv import load_dotenv
 import uvicorn
 from server import app
+import server
 import util.mongo as mongo
+import globals
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
@@ -40,6 +42,8 @@ class Bot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def on_ready(self):
+        server.bot = self
+
         logger.warning(f'Logged in as {self.user} (ID: {self.user.id}) PROD ENVIRONMENT')
         logger.warning('------')
         
@@ -47,6 +51,7 @@ class Bot(commands.Bot):
         from cogwatch import watch
         @watch(path='cogs', preload=True) 
         async def on_ready(self):
+            server.bot = self
             logger.info(f'Logged in as {self.user} (ID: {self.user.id}) DEV ENVIRONMENT')
             logger.info('------')
       
@@ -86,8 +91,8 @@ class Bot(commands.Bot):
     
 
 async def main():
-    threading.Thread(target=start_server, daemon=True).start()
     bot = Bot()
+    threading.Thread(target=start_server, daemon=True).start()
     await bot.start(TOKEN)
 
 if __name__ == "__main__":

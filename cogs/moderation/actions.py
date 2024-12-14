@@ -18,6 +18,7 @@ class ModerationCommands(commands.Cog):
     @commands.hybrid_command()
     @utils.has_permission('ban')
     async def ban(self, ctx, member: discord.Member, reason: str = "None provided"):
+        print(f"Running ban command: {ctx.author} attempting to ban {member}")
         if member == ctx.author:
             await ctx.send(f'{emojis.alert} You cant ban yourself!')
             return
@@ -25,8 +26,9 @@ class ModerationCommands(commands.Cog):
             await ctx.send(f'{emojis.alert} You cannot ban someone with the same or a higher role than you')
             return
         try:
-
-            await member.ban(reason=reason)
+        
+            # await member.ban(reason=reason)
+            pass
         except discord.errors.Forbidden:
             await ctx.send(f'{emojis.alert} I do not have permission to ban this user')
             return

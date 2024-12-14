@@ -27,6 +27,7 @@ class Mongo:
 
     async def insert_one(self, collection, data):
        try:
+           print(f"attempting to inssert: {data}")
            await self.db[collection].insert_one(data)
        except Exception as e:
            logging.error(f'Error inserting data into MongoDB: {e}')
@@ -41,7 +42,12 @@ class Mongo:
         
     async def find(self, collection, query):
         try:
-            return await self.db[collection].find(query)
+            cursor = self.db[collection].find(query)
+            results = []
+            async for document in cursor:
+                results.append(document)
+            print(f"Found {len(results)} documents")  # Debug print
+            return results
         except Exception as e:
             logging.error(f'Error finding data in MongoDB: {e}')
             raise e
