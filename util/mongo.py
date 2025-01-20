@@ -46,7 +46,7 @@ class Mongo:
             results = []
             async for document in cursor:
                 results.append(document)
-            print(f"Found {len(results)} documents")  # Debug print
+         
             return results
         except Exception as e:
             logging.error(f'Error finding data in MongoDB: {e}')

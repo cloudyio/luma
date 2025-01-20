@@ -9,6 +9,7 @@ from server import app
 import server
 import util.mongo as mongo
 import globals
+from util.queue_manager import queue_manager  # Add this import
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
@@ -17,7 +18,7 @@ ENVIRONMENT = os.getenv('ENVIRONMENT')
 if ENVIRONMENT == 'production':
     level = logging.WARNING
 else:
-    level = logging.INFO
+    level= logging.INFO
 
 logging.basicConfig(
     level=level,
@@ -40,10 +41,11 @@ class Bot(commands.Bot):
             intents.guilds = True
 
         super().__init__(command_prefix="!", intents=intents)
+        self.bg_task = None
 
     async def on_ready(self):
         server.bot = self
-
+        self.bg_task = self.loop.create_task(self.process_discord_queue())
         logger.warning(f'Logged in as {self.user} (ID: {self.user.id}) PROD ENVIRONMENT')
         logger.warning('------')
         
@@ -52,6 +54,7 @@ class Bot(commands.Bot):
         @watch(path='cogs', preload=True) 
         async def on_ready(self):
             server.bot = self
+            self.bg_task = self.loop.create_task(self.process_discord_queue())
             logger.info(f'Logged in as {self.user} (ID: {self.user.id}) DEV ENVIRONMENT')
             logger.info('------')
       
@@ -84,14 +87,38 @@ class Bot(commands.Bot):
         except Exception as e:
             logger.error(f"Error cleaning up log file: {e}")  
 
+    async def process_discord_queue(self):
+        while True:
+            try:
+                task = await queue_manager.get_task()
+                if task.action == "change_nickname":
+                    try:
+                        guild = self.get_guild(int(task.params['guild_id']))
+                        if guild:
+                            bot_member = guild.get_member(self.user.id)
+                            if bot_member:
+                                await bot_member.edit(nick=task.params['nickname'])
+                                task.future.set_result(True)
+                            else:
+                                task.future.set_exception(Exception("Bot not found in guild"))
+                        else:
+                            task.future.set_exception(Exception("Guild not found"))
+                    except Exception as e:
+                        task.future.set_exception(e)
+                queue_manager.task_done()
+            except Exception as e:
+                print(f"Error processing queue: {e}")
+                await asyncio.sleep(1)
+
     async def close(self):
+        if self.bg_task:
+            self.bg_task.cancel()
         await self.cleanup_logs()
         await super().close()
 
-    
-
 async def main():
     bot = Bot()
+    
     threading.Thread(target=start_server, daemon=True).start()
     await bot.start(TOKEN)
 

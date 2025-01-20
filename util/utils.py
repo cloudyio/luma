@@ -22,7 +22,8 @@ dev_emojis = {
     "warn": "<:warn:1316130616751951872>",
     "pardon": "<:pardon:1316132939855171614>",
     "right": "<:right:1317497147045970013>",
-    "left": "<:left:1317497124619030601>"
+    "left": "<:left:1317497124619030601>",
+    "trash": "<:trash:1317545338260819998>"
 }
 
 permissions_key = {
@@ -33,7 +34,19 @@ permissions_key = {
     'untimeout': "moderate_members",
     'warn': "kick_members",
     'pardon': "kick_members",
-    'manage': "manage_guild"
+    'manage': "manage_guild",
+    'manage_channel': "manage_channels",
+    'delete': "manage_messages"
+}
+
+color_map = {
+    'ban': 0xFF0000,    
+    'unban': 0x00FF00,  
+    'kick': 0xFFA500,   
+    'timeout': 0xFFFF00,
+    'untimeout': 0x00FF00, 
+    'warn': 0xFFD700,
+    'pardon': 0x00FF00
 }
 
 def generate_string(length=5):
@@ -53,7 +66,7 @@ async def time_format(ctx, time):
 def has_permission(permission_type):
     async def predicate(ctx):
         config = await bot.find_one('config', {'_id': str(ctx.guild.id)})
-        print(ctx.guild.id)
+
         if not config:
             await ctx.send(f'{emojis.alert} **this guild has not been setup!**')
             return False
@@ -89,42 +102,108 @@ def has_permission(permission_type):
         return False
     return commands.check(predicate)
 
-async def log_action(ctx, action, user, guild, reason='None provided'):
-    if action in ['ban', 'unban', 'kick', 'timeout', 'untimeout', 'warn', 'pardon']:
+async def log_action(ctx, action, user, guild, reason='None provided', channel_only = False):
+    if channel_only:
+        action_emoji = getattr(emojis, action, '')
+        embed = discord.Embed(
+            title=f"{action_emoji} {action.upper()}",
+            color=color_map.get(action, 0x7289DA),
+            timestamp=dt.now(datetime.timezone.utc)
+        )
         
-        while True:
-            log_id = generate_string()
-            print(log_id)
-            if not await bot.find_one('moderation', {'_id': log_id}):
-                break
+        embed.add_field(
+            name="Moderator",
+            value=f"{ctx.author.mention}\n`{ctx.author.name}` (`{ctx.author.id}`)",
+            inline=False
+        )
 
+        embed.add_field(
+            name="Action",
+            value=f"```{reason}```",
+            inline=False
+        )
+        
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+
+        config = await bot.find_one('config', {'_id': str(guild.id)})
+
+        log_channels = config.get('channel_logs', {})
+        if not log_channels:
+            return
+        
+        channel_id = log_channels.get(action, None)
+        if not channel_id:
+            return
+        
+        channel = guild.get_channel(config['channel_logs'][action])
+        if not channel:
+            return
+        
+        return await channel.send(embed=embed)
+
+    while True:
+        log_id = generate_string()
+        if not await bot.find_one('moderation', {'_id': log_id}):
+            break
+
+    if action in ['ban', 'unban', 'kick', 'timeout', 'untimeout', 'warn', 'pardon']:
         data = { 
-        '_id': log_id,
-        'action': action,
-        'user': user.id,
-        'guild': guild.id,
-        'reason': reason,
-        'timestamp': dt.now(datetime.timezone.utc)
+            '_id': log_id,
+            'action': action,
+            'user': user.id,
+            'moderator': ctx.author.id,
+            'guild': guild.id,
+            'reason': reason,
+            'timestamp': dt.now(datetime.timezone.utc)
         }
         await bot.insert_one('moderation', data)
 
-    config = await bot.find_one('config', {'_id': guild.id})
+    config = await bot.find_one('config', {'_id': str(guild.id)})
     
-    if not config or not config.get('log_channels') or not config['log_channels'].get(action):
+    log_channels = config.get('channel_logs', {})
+    if not log_channels:
         return
     
-    channel = guild.get_channel(config['log_channels'][action])
+    channel_id = log_channels.get(action, None)
+    if not channel_id:
+        return
+    
+    channel = guild.get_channel(config['channel_logs'][action])
     if not channel:
-        pass
+        return
+    
+   
+
+    action_emoji = getattr(emojis, action, '')
     
     embed = discord.Embed(
-        title=f'{action.capitalize()}',
-        description=f'User: {user.mention}\nReason: {reason}',
-        color=0x00ff00,
+        title=f"{action_emoji} {action.upper()} | Case {log_id}",
+        color=color_map.get(action, 0x7289DA),
+        timestamp=dt.now(datetime.timezone.utc)
     )
     
-    await channel.send(embed=embed)
+    embed.add_field(
+        name="User",
+        value=f"{user.mention}\n`{user.name}` (`{user.id}`)",
+        inline=False
+    )
     
+    embed.add_field(
+        name="Moderator",
+        value=f"{ctx.author.mention}\n`{ctx.author.name}` (`{ctx.author.id}`)",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="Reason",
+        value=f"```{reason}```",
+        inline=False
+    )
+    
+    embed.set_thumbnail(url=user.display_avatar.url)
+    embed.set_footer(text=f"Case ID: {log_id}")
+    
+    await channel.send(embed=embed)
     return data
 
 class Emojis:
@@ -174,6 +253,6 @@ class Pagnination(discord.ui.View):
         self.current_page = min(len(self.pages) - 1, self.current_page + 1)
         await self.update_page(interaction)
 
-        
+
 
 

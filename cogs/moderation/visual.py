@@ -60,6 +60,17 @@ class Visual(commands.Cog):
             value=f"```{case['reason']}```", 
             inline=False
         )
+        
+        moderator = ctx.guild.get_member(case['moderator'])
+        if not moderator:
+            moderator = await self.bot.fetch_user(case['moderator'])
+        
+        embed.add_field(
+            name="Moderator",
+            value=f"{moderator.mention}\n({moderator.name})" if moderator else "Unknown Moderator",
+            inline=False
+        )
+        
         embed.set_thumbnail(url=user.display_avatar.url)
         embed.timestamp = case['timestamp']
         embed.set_footer(text=f"Case ID: {case['_id']}")
@@ -90,9 +101,14 @@ class Visual(commands.Cog):
                 timestamp = discord.utils.format_dt(case['timestamp'], style='R')
                 formatted_date = discord.utils.format_dt(case['timestamp'], style='D')
                 
+                moderator = ctx.guild.get_member(case['moderator'])
+                if not moderator:
+                    moderator = await self.bot.fetch_user(case['moderator'])
+                mod_text = f"{moderator.name}" if moderator else "Unknown Moderator"
+                
                 embed.add_field(
                     name=f"{action_emoji} Case {case['_id']} • {case['action'].upper()}",
-                    value=f"**When:** {formatted_date} ({timestamp})\n**Reason:** {case['reason'][:250]}",
+                    value=f"**When:** {formatted_date} ({timestamp})\n**Moderator:** {mod_text}\n**Reason:** {case['reason'][:250]}",
                     inline=False
                 )
             

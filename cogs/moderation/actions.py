@@ -17,7 +17,7 @@ class ModerationCommands(commands.Cog):
 
     @commands.hybrid_command()
     @utils.has_permission('ban')
-    async def ban(self, ctx, member: discord.Member, reason: str = "None provided"):
+    async def ban(self, ctx, member: discord.Member,*, reason: str = "None provided"):
         print(f"Running ban command: {ctx.author} attempting to ban {member}")
         if member == ctx.author:
             await ctx.send(f'{emojis.alert} You cant ban yourself!')
@@ -40,7 +40,7 @@ class ModerationCommands(commands.Cog):
 
     @commands.hybrid_command()
     @utils.has_permission('unban')
-    async def unban(self, ctx, user: discord.User, reason: str = "None provided"):
+    async def unban(self, ctx, user: discord.User,*, reason: str = "None provided"):
         try:
             await ctx.guild.unban(user, reason=reason)
         except discord.errors.NotFound:
@@ -57,7 +57,7 @@ class ModerationCommands(commands.Cog):
 
     @commands.hybrid_command()
     @utils.has_permission('kick')
-    async def kick(self, ctx, member: discord.Member, reason: str= "None provided"):
+    async def kick(self, ctx, member: discord.Member,*, reason: str= "None provided"):
         if member == ctx.author:
             await ctx.send(f'{emojis.alert} You cant kick yourself!')
             return
@@ -78,7 +78,7 @@ class ModerationCommands(commands.Cog):
 
     @commands.hybrid_command()
     @utils.has_permission('timeout')
-    async def timeout(self, ctx, member: discord.Member, length: str, reason: str = "None provided"):
+    async def timeout(self, ctx, member: discord.Member, length: str,*, reason: str = "None provided"):
         if member == ctx.author:
             await ctx.send(f'{emojis.alert} You cant timeout yourself!')
             return
@@ -103,7 +103,7 @@ class ModerationCommands(commands.Cog):
 
     @commands.hybrid_command()
     @utils.has_permission('untimeout')
-    async def untimeout(self, ctx, member: discord.Member, reason: str = 'None provided'):
+    async def untimeout(self, ctx, member: discord.Member,*, reason: str = 'None provided'):
        
         if not member.timed_out_until:
             await ctx.send(f'{emojis.alert} **{member}** is not timed out!')
@@ -120,7 +120,7 @@ class ModerationCommands(commands.Cog):
 
     @commands.hybrid_command()
     @utils.has_permission('warn')
-    async def warn(self, ctx, member: discord.Member, reason: str = None):
+    async def warn(self, ctx, member: discord.Member,*, reason: str = None):
         if not reason:
             await ctx.send(f'{emojis.alert} You must provide a reason')
             return
@@ -137,11 +137,43 @@ class ModerationCommands(commands.Cog):
 
     @commands.hybrid_command()
     @utils.has_permission('pardon')
-    async def pardon(self, ctx, member: discord.Member, id: str, reason: str = 'None provided'):
+    async def pardon(self, ctx, member: discord.Member, case_id: str = None,*, reason: str = 'None provided'):
+        if not case_id:
+            await ctx.send(f'{emojis.alert} You must provide a case ID')
+            return
+        case = await bot.find_one('moderation', {'_id': case_id, 'action': 'warn'})
+        if not case:
+            await ctx.send(f'{emojis.alert} Could not find this warn')
+            return
+        
         bot_message = await ctx.send(f'{emojis.pardon} **{member}** has been pardoned')
-        await utils.log_action(ctx, 'pardon', member, ctx.guild, reason)
+        await utils.log_action(ctx, 'pardon', member, ctx.guild, f'Pardoned case {case_id} | {reason}')
         await self.delete_messages(ctx, bot_message)
 
+
+    @commands.hybrid_command()
+    @utils.has_permission('manage_channel')
+    async def purge(self, ctx, amount: int, user: discord.Member = None, type: str = 'all'):
+        if amount > 200:
+            await ctx.send(f'{emojis.alert} You cannot delete more than 200 messages at once')
+            return
+        
+        await ctx.send(f'{emojis.trash} Deleting {amount} messages...', delete_after=3)
+
+        def check(message):
+            if user and message.author != user:
+                return False
+                
+            if type.lower() == 'media':
+                return len(message.attachments) > 0 or len(message.embeds) > 0
+            elif type.lower() == 'text':
+                return len(message.attachments) == 0 and len(message.embeds) == 0
+            return True
+        
+        deleted = await ctx.channel.purge(limit=amount+2, check=check)
+        await ctx.send(f'{emojis.trash} Deleted {len(deleted)} messages', delete_after=3)
+
+        await utils.log_action(ctx, 'purge', ctx.author, ctx.guild, f'Deleted {len(deleted)} messages', channel_only=True)
 
 async def setup(bot):  
     await bot.add_cog(ModerationCommands(bot))
